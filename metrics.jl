@@ -47,6 +47,7 @@ open("./files/metrics_fa12.csv", "w") do file
     "Lowest term unit load name",
     "% of courses with prerequisites",
     "% of units in major",
+    "Major Complexity",
     # Flags
     "Under 180 units?",
     "Over 200 units?",
@@ -94,6 +95,12 @@ open("./files/metrics_fa12.csv", "w") do file
           if course.institution == "DEPARTMENT";
           init=0
         )
+        major_complexity = sum(
+          course.metrics["complexity"]
+          for course in curriculum.courses
+          if course.institution == "DEPARTMENT";
+          init=0
+        )
         min_term_units, max_term_units = extrema(term.credit_hours for term in plan.terms)
 
         writerow(file, String[
@@ -119,6 +126,7 @@ open("./files/metrics_fa12.csv", "w") do file
             !isempty(course.requisites)
           end / length(curriculum.courses)), # % of courses with prerequisites
           string(major_units / plan.credit_hours), # % of units in major
+          string(major_complexity),# major complexity
           # Flags
           string(plan.credit_hours < 180), # Under 180 units?
           string(plan.credit_hours > 200), # Over 200 units?
