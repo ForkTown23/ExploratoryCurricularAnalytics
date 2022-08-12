@@ -1,29 +1,11 @@
 module Metrics
 
 include("Output.jl")
+include("Utils.jl")
 
-import CurricularAnalytics: basic_metrics, Course, Curriculum, DegreePlan, isvalid_curriculum
-import .Output: output, plans, termname
-
-function convert(::Type{Curriculum}, plan::DegreePlan)
-  c = Curriculum(plan.name, [course for term in plan.terms for course in term.courses])
-  if !isvalid_curriculum(c)
-    error("$(plan.name) is not a valid curriculum")
-  end
-  c
-end
-
-function writerow(io::IO, row::AbstractVector{String})
-  join(io, [
-      if any([',', '"', '\r', '\n'] .∈ field)
-        "\"$(replace(field, "\"" => "\"\""))\""
-      else
-        field
-      end for field in row
-    ], ",")
-  write(io, "\n")
-  flush(io)
-end
+import CurricularAnalytics: basic_metrics, Course, course_from_id, Curriculum, extraneous_requisites
+import .Output: colleges, output, plans, termname
+import .Utils: convert, writerow
 
 open("./files/metrics_fa12.csv", "w") do file
   writerow(file, [
@@ -45,9 +27,10 @@ open("./files/metrics_fa12.csv", "w") do file
     "Highest term unit load name",
     "Lowest term unit load",
     "Lowest term unit load name",
+    "# redundant prereqs",
+    "Redundant prereqs",
     "% of courses with prerequisites",
     "% of units in major",
-    "Major Complexity",
     # Flags
     "Under 180 units?",
     "Over 200 units?",
@@ -65,7 +48,7 @@ open("./files/metrics_fa12.csv", "w") do file
       degree_plans = output(year, major)
       plan_units = [plan.credit_hours for plan in values(degree_plans)]
 
-      for college in ["RE", "MU", "TH", "WA", "FI", "SI", "SN"]
+      for college in colleges
         # Ignoring Seventh before 2020 because its plans were scuffed (and it
         # didn't exist)
         if college ∉ keys(degree_plans) || college == "SN" && year < 2020
@@ -95,13 +78,9 @@ open("./files/metrics_fa12.csv", "w") do file
           if course.institution == "DEPARTMENT";
           init=0
         )
-        major_complexity = sum(
-          course.metrics["complexity"]
-          for course in curriculum.courses
-          if course.institution == "DEPARTMENT";
-          init=0
-        )
         min_term_units, max_term_units = extrema(term.credit_hours for term in plan.terms)
+
+        redundant_reqs = extraneous_requisites(curriculum)
 
         writerow(file, String[
           string(year), # Year
@@ -122,11 +101,12 @@ open("./files/metrics_fa12.csv", "w") do file
           termname(year, findfirst(term.credit_hours == max_term_units for term in plan.terms)), # Highest term unit load name
           string(min_term_units), # Lowest term unit load
           termname(year, findfirst(term.credit_hours == min_term_units for term in plan.terms)), # Lowest term unit load name
+          string(length(redundant_reqs)), # # redundant prereqs
+          join(("$(course_from_id(curriculum, prereq).name) → $(course_from_id(curriculum, course).name)" for (prereq, course) in redundant_reqs), ", "), # Redundant prereqs
           string(count(curriculum.courses) do course
             !isempty(course.requisites)
           end / length(curriculum.courses)), # % of courses with prerequisites
           string(major_units / plan.credit_hours), # % of units in major
-          string(major_complexity),# major complexity
           # Flags
           string(plan.credit_hours < 180), # Under 180 units?
           string(plan.credit_hours > 200), # Over 200 units?
