@@ -13,12 +13,12 @@ def csv_to_file(csv: str, path: str) -> None:
         file.write(csv)
 
 
-for major_code, plan in major_plans().items():
+for major_code, plan in major_plans(2021).items():
     os.makedirs(f"./files/output/{major_code}/", exist_ok=True)
 
-    output = MajorOutput(major_code)
+    output = MajorOutput(plan)
     csv_to_file(output.output(), f"./files/output/{major_code}/curriculum.csv")
-    for college_code in plan.plans.keys():
+    for college_code in plan.colleges:
         csv_to_file(
             output.output(college_code),
             f"./files/output/{major_code}/{college_code}.csv",

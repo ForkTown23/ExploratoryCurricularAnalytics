@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Changes in plans over time</title>
+    <meta
+      name="description"
+      content="Shows the specific changes made to each major/college academic plan between each year."
+    />
+
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+      }
+      #root {
+        display: flex;
+      }
+      @media (orientation: portrait) {
+        #root {
+          flex-direction: column;
+        }
+      }
+      .side {
+        flex: 1 0 0;
+        overflow: auto;
+      }
+      tr:first-child {
+        position: sticky;
+        top: 0;
+        background-color: white;
+      }
+      tr:nth-child(2n) td:not([rowspan]) {
+        background-color: rgba(0, 0, 0, 0.05);
+      }
+      th {
+        vertical-align: top;
+        text-align: left;
+      }
+      th[scope='row'] {
+        border-bottom: 1px solid currentColor;
+      }
+      th[rowspan] {
+        border-top: 1px solid currentColor;
+      }
+      button:not(:disabled) {
+        cursor: pointer;
+      }
+      .diff {
+        background-color: #333;
+        color: white;
+        padding: 20px;
+        font-family: sans-serif;
+        color-scheme: dark;
+      }
+      .units {
+        font-weight: normal;
+      }
+      .changes {
+        list-style: none;
+        padding: 0;
+        color: #adbac7;
+      }
+      .change-item::before {
+        font-family: monospace;
+      }
+      .removed {
+        color: #ffd8d3;
+        background-color: #78191b;
+      }
+      .removed::before {
+        content: '- ';
+      }
+      .added {
+        color: #b4f1b4;
+        background-color: #1b4721;
+      }
+      .added::before {
+        content: '+ ';
+      }
+      .changed::before {
+        content: '* ';
+      }
+      .change {
+        color: #ffddb0;
+        background-color: #682d0f;
+      }
+      .arrow {
+        font-family: monospace;
+        color: white;
+      }
+      .info,
+      .complexity {
+        opacity: 0.8;
+      }
+      summary {
+        cursor: pointer;
+      }
+      .select-metric {
+        position: sticky;
+        bottom: 0;
+      }
+      noscript {
+        color: red;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <p>Please enable JavaScript to view the changes in plans.</p>
+    </noscript>
+    <div id="root"></div>
+  </body>
+</html>
