@@ -2,7 +2,9 @@ from itertools import chain
 import re
 from typing import Dict, List, Optional, Tuple
 
-from parse_defs import CourseCode, ProcessedCourse, RawCourse
+from parse_defs import CourseCode, Prerequisite, ProcessedCourse, RawCourse, TermCode
+
+__all__ = ["university"]
 
 
 ParsedCourseCodes = List[Tuple[Optional[CourseCode], float]]
@@ -99,12 +101,22 @@ def clean_course_title(title: str) -> str:
     return title
 
 
+# Used for mapping term indices to term codes
+QUARTERS = ["FA", "WI", "SP"]
+
+
 class UCSD:
+    name = "University of California, San Diego"
+    term_type = "Quarter"
+
+    prereqs_file = "./files/prereqs_fa12.csv"
+    plans_file = "./files/academic_plans_fa12.csv"
+    majors_file = "./files/isis_major_code_list.xlsx - Major Codes.csv"
+
     # College codes from least to most weird colleges (see #14)
     curriculum_priority = ["TH", "WA", "SN", "MU", "FI", "RE", "SI"]
 
-    @staticmethod
-    def process_plan(plan: List[RawCourse]) -> List[ProcessedCourse]:
+    def process_plan(self, plan: List[RawCourse]) -> List[ProcessedCourse]:
         courses: List[ProcessedCourse] = []
         for course in plan:
             title = clean_course_title(course.course_title)
@@ -125,3 +137,25 @@ class UCSD:
                     )
                 )
         return courses
+
+    def fix_prereqs(
+        self, prereqs: Dict[CourseCode, List[List[Prerequisite]]], term: TermCode
+    ) -> None:
+        # Fix possible errors in prereqs (#52)
+        prereqs[CourseCode("NANO", "102")] = [
+            [Prerequisite(CourseCode("CHEM", "6C"), False)]
+        ]
+        prereqs[CourseCode("DOC", "2")] = [
+            [Prerequisite(CourseCode("DOC", "1"), False)]
+        ]
+        # Math 18 has no prereqs because it only requires pre-calc, which we
+        # assume the student has credit for
+        prereqs[CourseCode("MATH", "18")] = []
+
+    def get_term_code(self, start_year: int, term_index: int) -> TermCode:
+        return TermCode(
+            QUARTERS[term_index % 3] + f"{(start_year + term_index // 3) % 100:02d}"
+        )
+
+
+university = UCSD()

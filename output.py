@@ -9,15 +9,7 @@ Exports:
     variable.
 """
 
-from typing import (
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    NamedTuple,
-    Optional,
-    Set,
-)
+from typing import Dict, Generator, List, NamedTuple, Optional, Set
 from college_names import college_names
 from output_json import Curriculum, CurriculumHash, Item, Term, Requisite
 
@@ -29,12 +21,11 @@ from parse import (
     major_codes,
     prereqs,
 )
-from parse_course_name import parse_course_name
+from ucsd import university
+from util import CsvWriter
 
 __all__ = ["MajorOutput"]
 
-INSTITUTION = "University of California, San Diego"
-SYSTEM_TYPE = "Quarter"
 HEADER = [
     "Course ID",
     "Course Name",
@@ -51,6 +42,7 @@ HEADER = [
 CURRICULUM_COLS = 10
 DEGREE_PLAN_COLS = 11
 
+# TODO: Remove this
 non_course_prereqs: Dict[str, List[CourseCode]] = {
     "SOCI- UD METHODOLOGY": [CourseCode("SOCI", "60")],
     "TDHD XXX": [CourseCode("TDTR", "10")],
@@ -92,8 +84,6 @@ class OutputCourses:
     additional courses do not share course IDs between each other on Curricular
     Analytics.
     """
-
-    term_names = ["FA", "WI", "SP", "S1"]
 
     processed_courses: List[ProcessedCourse]
     current_id: int
@@ -158,7 +148,7 @@ class OutputCourses:
         for course in self.processed_courses:
             if course.course_code is None:
                 continue
-            if course.term >= before:
+            if course.term_index >= before:
                 return
             for code, concurrent in alternatives:
                 if course.course_code == code:
@@ -199,12 +189,8 @@ class OutputCourses:
                         [Prerequisite(prereq, False)],
                         term,
                     )
-            elif code != ("MATH", "18"):
-                # Math 18 has no prereqs because it only requires pre-calc,
-                # which we assume the student has credit for
-                reqs = prereqs(
-                    self.term_names[term % 3] + f"{(self.year + term // 3) % 100:02d}"
-                )
+            else:
+                reqs = prereqs(university.get_term_code(self.year, term))
                 if code in reqs:
                     for alternatives in reqs[code]:
                         self._find_prereq(
@@ -227,32 +213,6 @@ class OutputCourses:
                 units,
                 term,
             )
-
-
-def rows_to_csv(rows: Iterable[List[str]], columns: int) -> Generator[str, None, None]:
-    """
-    Converts a list of lists of fields into lines of CSV records. Yields a
-    newline-terminated line.
-
-    The return value from `_output_plan` should be passed as the `rows` argument.
-
-    `_output_plan` always outputs a "Term" column because I'm lazy, so this
-    function can cut off extra columns or adds empty fields as needed to meet
-    the column count.
-    """
-    for row in rows:
-        yield (
-            ",".join(
-                [
-                    '"' + field.replace('"', '""') + '"'
-                    if any(c in field for c in ',"\r\n')
-                    else field
-                    for field in row
-                ][:columns]
-                + [""] * (columns - len(row))
-            )
-            + "\n"
-        )
 
 
 class MajorOutput:
@@ -279,40 +239,43 @@ class MajorOutput:
                 self.course_ids[course.course_code] = self.start_id
                 self.start_id += 1
 
-    def _output_plan(
-        self, college: Optional[str] = None
-    ) -> Generator[List[str], None, None]:
+    def output(self, college: Optional[str] = None) -> str:
         """
-        Outputs a curriculum or degree plan in Curricular Analytics' CSV format,
-        yielding one row at a time.
+        Outputs a curriculum or degree plan in Curricular Analytics' CSV
+        format[^1], yielding one row at a time.
 
         To output a degree plan, specify the college that the degree plan is
         for. If the college isn't specified, then `_output_plan` will output the
         major's curriculum instead.
+
+        [^1]: https://curricularanalytics.org/files
         """
+        if college is not None and college not in self.plans.colleges:
+            raise KeyError(f"No degree plan available for {college}.")
+        output = CsvWriter(DEGREE_PLAN_COLS if college else CURRICULUM_COLS)
         major_info = major_codes()[self.plans.major_code]
-        yield ["Curriculum", major_info.name]
+        output.row("Curriculum", major_info.name)
         if college:
-            yield ["Degree Plan", f"{major_info.name}/ {college_names[college]}"]
-        yield ["Institution", INSTITUTION]
+            output.row("Degree Plan", f"{major_info.name}/ {college_names[college]}")
+        output.row("Institution", university.name)
         # NOTE: Currently just gets the last listed award type (bias towards BS over
         # BA). Will see how to deal with BA vs BS
         # For undeclared majors, there is no award type, so will just use
         # Curricular Analytics' default, BS.
-        yield [
+        output.row(
             "Degree Type",
             list(major_info.award_types)[-1] if major_info.award_types else "BS",
-        ]
-        yield ["System Type", SYSTEM_TYPE]
-        yield ["CIP", major_info.cip_code]
+        )
+        output.row("System Type", university.term_type)
+        output.row("CIP", major_info.cip_code)
 
         processed = OutputCourses(self, college)
 
         for major_course_section in True, False:
             if not college and not major_course_section:
                 break
-            yield ["Courses" if major_course_section else "Additional Courses"]
-            yield HEADER
+            output.row("Courses" if major_course_section else "Additional Courses")
+            output.row(*HEADER)
             for (
                 course_id,
                 course_title,
@@ -322,33 +285,21 @@ class MajorOutput:
                 units,
                 term,
             ) in processed.list_courses(major_course_section):
-                yield [
-                    str(course_id),
-                    course_title,
-                    subject,
-                    number,
-                    ";".join(map(str, prereq_ids)),
-                    ";".join(map(str, coreq_ids)),
-                    "",
-                    f"{units:g}",  # https://stackoverflow.com/a/2440708
-                    "",
-                    "",
-                    str(term + 1),
-                ]
+                output.row(
+                    str(course_id),  # Course ID
+                    course_title,  # Course Name
+                    subject,  # Prefix
+                    number,  # Number
+                    ";".join(map(str, prereq_ids)),  # Prerequisites
+                    ";".join(map(str, coreq_ids)),  # Corequisites
+                    "",  # Strict-Corequisites
+                    f"{units:g}",  # Credit Hours; https://stackoverflow.com/a/2440708
+                    "",  # Institution
+                    "",  # Canonical Name
+                    str(term + 1),  # Term
+                )
 
-    def output(self, college: Optional[str] = None) -> str:
-        """
-        A helper function that collects the rows from `_output_plan` into a
-        single newline-terminated string with the entire CSV. You'll probably
-        want to use this instead of `_output_plan`.
-        """
-        if college is not None and college not in self.plans.colleges:
-            raise KeyError(f"No degree plan available for {college}.")
-        cols = DEGREE_PLAN_COLS if college else CURRICULUM_COLS
-        csv = ""
-        for line in rows_to_csv(self._output_plan(college), cols):
-            csv += line
-        return csv
+        return output.done()
 
     def output_json(self, college: Optional[str] = None) -> Curriculum:
         """
@@ -409,12 +360,10 @@ class MajorOutput:
         output.course_ids = {}
         output.start_id = 1
         for course in json["courses"]:
-            parsed = parse_course_name(course["name"])
-            if parsed:
-                # Assumes lab courses were already split, so won't bother
-                # handling has_lab
-                subject, number, _ = parsed
-                output.course_ids[CourseCode(subject, number)] = course["id"]
+            if course["prefix"] and course["num"]:
+                output.course_ids[CourseCode(course["prefix"], course["num"])] = course[
+                    "id"
+                ]
             if course["id"] + 1 > output.start_id:
                 output.start_id = course["id"] + 1
         return output
