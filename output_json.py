@@ -1,5 +1,5 @@
-from typing import List, Optional, TypedDict
-from typing_extensions import Literal
+from typing import List, Optional
+from typing_extensions import Literal, TypedDict
 
 
 class Requisite(TypedDict):
