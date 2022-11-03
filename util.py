@@ -5,7 +5,8 @@ that maps keys to lists of values with the same key.
 
 import csv
 from io import StringIO
-from typing import Any, Callable, Dict, Iterator, List, Protocol, Tuple, TypeVar
+from typing import Any, Callable, Dict, Iterator, List, Tuple, TypeVar
+from typing_extensions import Protocol
 
 
 K = TypeVar("K")
@@ -105,7 +106,7 @@ class CsvWriter:
     def row(self, *values: str) -> None:
         row = list(values)
         self._writer.writerow(
-            row[0 : self._cols]
+            row[0: self._cols]
             if len(row) > self._cols
             else row + [""] * (len(row) - self._cols)
             if len(row) < self._cols
