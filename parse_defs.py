@@ -1,5 +1,6 @@
 from functools import total_ordering
 from typing import Literal, NamedTuple, Optional, Tuple
+from typing_extensions import Literal
 
 
 @total_ordering
